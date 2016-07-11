@@ -16,15 +16,17 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
     <parent>
-        <groupId>org.wso2.carbon.identity</groupId>
-        <artifactId>identity-extension-parent</artifactId>
-        <version>5.1.0</version>
+        <groupId>org.wso2</groupId>
+        <artifactId>wso2</artifactId>
+        <version>1</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
+    <groupId>org.wso2.carbon.identity</groupId>
     <artifactId>identity-carbon-auth-mutual-ssl</artifactId>
     <version>5.1.1-SNAPSHOT</version>
     <packaging>pom</packaging>
@@ -36,10 +38,16 @@
 
     <scm>
         <url>https://github.com/wso2-extensions/identity-carbon-auth-mutual-ssl.git</url>
-        <developerConnection>scm:git:https://github.com/wso2-extensions/identity-carbon-auth-mutual-ssl.git</developerConnection>
+        <developerConnection>scm:git:https://github.com/wso2-extensions/identity-carbon-auth-mutual-ssl.git
+        </developerConnection>
         <connection>scm:git:https://github.com/wso2-extensions/identity-carbon-auth-mutual-ssl.git</connection>
         <tag>HEAD</tag>
     </scm>
+
+    <modules>
+        <module>components/org.wso2.carbon.identity.authenticator.mutualssl</module>
+        <module>features/org.wso2.carbon.identity.authenticator.mutualssl.feature</module>
+    </modules>
 
     <repositories>
         <repository>
@@ -115,10 +123,172 @@
         </pluginRepository>
     </pluginRepositories>
 
-    <modules>
-        <module>components/org.wso2.carbon.identity.authenticator.mutualssl</module>
-        <module>features/org.wso2.carbon.identity.authenticator.mutualssl.feature</module>
-    </modules>
+    <dependencyManagement>
+        <dependencies>
+            <!-- Carbon Kernel Dependencies -->
+            <dependency>
+                <groupId>org.wso2.carbon</groupId>
+                <artifactId>org.wso2.carbon.core</artifactId>
+                <version>${carbon.kernel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.wso2.carbon</groupId>
+                <artifactId>org.wso2.carbon.core.common</artifactId>
+                <version>${carbon.kernel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.wso2.carbon</groupId>
+                <artifactId>org.wso2.carbon.logging</artifactId>
+                <version>${carbon.kernel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.wso2.carbon</groupId>
+                <artifactId>org.wso2.carbon.core.services</artifactId>
+                <version>${carbon.kernel.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.wso2.carbon</groupId>
+                <artifactId>org.wso2.carbon.utils</artifactId>
+                <version>${carbon.kernel.version}</version>
+            </dependency>
+
+            <!-- Commons dependencies -->
+            <dependency>
+                <groupId>commons-lang.wso2</groupId>
+                <artifactId>commons-lang</artifactId>
+                <version>${commons-lang.wso2.version}</version>
+            </dependency>
+
+            <!-- Identity Carbon Auth Mutual SSL Dependencies -->
+            <dependency>
+                <groupId>org.wso2.carbon.identity</groupId>
+                <artifactId>org.wso2.carbon.identity.authenticator.mutualssl</artifactId>
+                <version>${identity.carbon.auth.mutual.ssl.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.felix</groupId>
+                    <artifactId>maven-scr-plugin</artifactId>
+                    <version>${maven.scr.plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>generate-scr-scrdescriptor</id>
+                            <goals>
+                                <goal>scr</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.felix</groupId>
+                    <artifactId>maven-bundle-plugin</artifactId>
+                    <version>${maven.bundle.plugin.version}</version>
+                    <extensions>true</extensions>
+                    <configuration>
+                        <obrRepository>NONE</obrRepository>
+                        <instructions>
+                            <SCM-Revision>${buildNumber}</SCM-Revision>
+                        </instructions>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>buildnumber-maven-plugin</artifactId>
+                    <version>${maven.buildnumber.plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <phase>validate</phase>
+                            <goals>
+                                <goal>create</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                    <configuration>
+                        <doCheck>false</doCheck>
+                        <doUpdate>false</doUpdate>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <configuration>
+                    <preparationGoals>clean install</preparationGoals>
+                    <autoVersionSubmodules>true</autoVersionSubmodules>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <inherited>true</inherited>
+                <configuration>
+                    <encoding>UTF-8</encoding>
+                    <source>1.7</source>
+                    <target>1.7</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>buildnumber-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+
+    <properties>
+        <!-- Identity Carbon Auth Mutual SSL version -->
+        <identity.carbon.auth.mutual.ssl.version>${project.version}</identity.carbon.auth.mutual.ssl.version>
+        <identity.carbon.auth.mutual.ssl.exp.version>${identity.carbon.auth.mutual.ssl.version}</identity.carbon.auth.mutual.ssl.exp.version>
+        <identity.carbon.auth.mutual.ssl.imp.pkg.version.range>[5.0.0,6.0.0)</identity.carbon.auth.mutual.ssl.imp.pkg.version.range>
+
+        <!-- OSGi framework component version -->
+        <osgi.service.component.imp.pkg.version.range>[1.2.0, 2.0.0)</osgi.service.component.imp.pkg.version.range>
+        <osgi.framework.imp.pkg.version.range>[1.7.0, 2.0.0)</osgi.framework.imp.pkg.version.range>
+        <osgi.util.tracker.imp.pkg.version.range>[1.5.1, 2.0.0)</osgi.util.tracker.imp.pkg.version.range>
+
+        <!-- Carbon Kernel version -->
+        <carbon.kernel.version>4.4.7</carbon.kernel.version>
+        <carbon.kernel.imp.pkg.version.range>[4.4.0, 5.0.0)</carbon.kernel.imp.pkg.version.range>
+
+        <!--Carbon Component version-->
+        <carbon.user.api.imp.pkg.version.range>[1.0.1, 2.0.0)</carbon.user.api.imp.pkg.version.range>
+
+        <!-- Servlet API -->
+        <imp.pkg.version.javax.servlet>[2.6.0, 3.0.0)</imp.pkg.version.javax.servlet>
+
+        <!-- Axis2 Version -->
+        <axis2.wso2.version>1.6.1.wso2v12</axis2.wso2.version>
+        <axis2.osgi.version.range>[1.6.1.wso2v12, 2.0.0)</axis2.osgi.version.range>
+
+        <!-- Axiom Version -->
+        <axiom.wso2.version>1.2.11.wso2v10</axiom.wso2.version>
+        <axiom.osgi.version.range>[1.2.11, 2.0.0)</axiom.osgi.version.range>
+
+        <!-- Commons Version -->
+        <commons-logging.version>1.2</commons-logging.version>
+        <commons-logging.osgi.version.range>[1.2,2.0)</commons-logging.osgi.version.range>
+
+        <commons-lang.wso2.version>2.6.0.wso2v1</commons-lang.wso2.version>
+        <commons-lang.wso2.osgi.version.range>[2.6.0,3.0.0)</commons-lang.wso2.osgi.version.range>
+
+        <!-- Maven Plugin Version -->
+        <maven.scr.plugin.version>1.7.2</maven.scr.plugin.version>
+        <maven.bundle.plugin.version>2.4.0</maven.bundle.plugin.version>
+        <maven.buildnumber.plugin.version>1.4</maven.buildnumber.plugin.version>
+        <carbon.p2.plugin.version>1.5.3</carbon.p2.plugin.version>
+    </properties>
+
 
 </project>
 

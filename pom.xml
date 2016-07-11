@@ -249,7 +249,7 @@
     <properties>
         <!-- Identity Carbon Auth Mutual SSL version -->
         <identity.carbon.auth.mutual.ssl.version>${project.version}</identity.carbon.auth.mutual.ssl.version>
-        <identity.carbon.auth.mutual.ssl.exp.version>${identity.carbon.auth.mutual.ssl.version}</identity.carbon.auth.mutual.ssl.exp.version>
+        <identity.carbon.auth.mutual.ssl.exp.version>${project.version}</identity.carbon.auth.mutual.ssl.exp.version>
         <identity.carbon.auth.mutual.ssl.imp.pkg.version.range>[5.0.0,6.0.0)</identity.carbon.auth.mutual.ssl.imp.pkg.version.range>
 
         <!-- OSGi framework component version -->

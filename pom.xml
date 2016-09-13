@@ -25,7 +25,7 @@
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
-    <groupId>org.wso2.carbon.identity</groupId>
+    <groupId>org.wso2.carbon.identity.carbon.auth.mutualssl</groupId>
     <artifactId>identity-carbon-auth-mutual-ssl</artifactId>
     <version>5.1.2-SNAPSHOT</version>
     <packaging>pom</packaging>
@@ -160,7 +160,7 @@
 
             <!-- Identity Carbon Auth Mutual SSL Dependencies -->
             <dependency>
-                <groupId>org.wso2.carbon.identity</groupId>
+                <groupId>org.wso2.carbon.identity.carbon.auth.mutualssl</groupId>
                 <artifactId>org.wso2.carbon.identity.authenticator.mutualssl</artifactId>
                 <version>${project.version}</version>
             </dependency>

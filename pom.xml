@@ -27,7 +27,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.wso2.carbon.identity.carbon.auth.mutualssl</groupId>
     <artifactId>identity-carbon-auth-mutual-ssl</artifactId>
-    <version>5.1.3-SNAPSHOT</version>
+    <version>5.1.3</version>
     <packaging>pom</packaging>
     <name>WSO2 Carbon - Mutual SSL Authenticator Module</name>
     <description>
@@ -40,7 +40,7 @@
         <developerConnection>scm:git:https://github.com/wso2-extensions/identity-carbon-auth-mutual-ssl.git
         </developerConnection>
         <connection>scm:git:https://github.com/wso2-extensions/identity-carbon-auth-mutual-ssl.git</connection>
-        <tag>HEAD</tag>
+        <tag>v5.1.3</tag>
     </scm>
 
     <modules>

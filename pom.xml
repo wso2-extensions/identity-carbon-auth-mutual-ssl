@@ -21,7 +21,7 @@
     <parent>
         <groupId>org.wso2</groupId>
         <artifactId>wso2</artifactId>
-        <version>1</version>
+        <version>1.2</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -231,6 +231,25 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>buildnumber-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <source>1.8</source>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <!--This parameter disables doclint-->
+                            <doclint>none</doclint>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
@@ -238,7 +257,7 @@
     <properties>
         <!-- Identity Carbon Auth Mutual SSL version -->
         <identity.carbon.auth.mutual.ssl.exp.version>${project.version}</identity.carbon.auth.mutual.ssl.exp.version>
-        <identity.carbon.auth.mutual.ssl.imp.pkg.version.range>[5.2.0,6.0.0)</identity.carbon.auth.mutual.ssl.imp.pkg.version.range>
+        <identity.carbon.auth.mutual.ssl.imp.pkg.version.range>[5.3.0,6.0.0)</identity.carbon.auth.mutual.ssl.imp.pkg.version.range>
 
         <!-- OSGi framework component version -->
         <osgi.service.component.imp.pkg.version.range>[1.2.0, 2.0.0)</osgi.service.component.imp.pkg.version.range>
@@ -246,7 +265,7 @@
         <osgi.util.tracker.imp.pkg.version.range>[1.5.1, 2.0.0)</osgi.util.tracker.imp.pkg.version.range>
 
         <!-- Carbon Kernel version -->
-        <carbon.kernel.version>4.5.0-m1</carbon.kernel.version>
+        <carbon.kernel.version>4.5.0-m3</carbon.kernel.version>
         <carbon.kernel.imp.pkg.version.range>[4.4.0, 5.0.0)</carbon.kernel.imp.pkg.version.range>
 
         <!--Carbon Component version-->

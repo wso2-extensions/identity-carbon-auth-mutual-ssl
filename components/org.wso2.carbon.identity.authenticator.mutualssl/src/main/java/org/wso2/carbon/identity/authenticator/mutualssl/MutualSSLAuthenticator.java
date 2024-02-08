@@ -80,6 +80,8 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
      */
     private static final String CHARACTER_ENCODING = "UTF-8";
 
+    private static final String ENABLE_SHA256_CERTIFICATE_THUMBPRINT = "EnableSHA256";
+
     /**
      * Logger for the class
      */
@@ -89,6 +91,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static String[] whiteList;
     private static boolean whiteListEnabled = false;
     private static boolean authenticatorInitialized = false;
+    private static boolean enableSHA256CertificateThumbprint = true;
 
 
     /**
@@ -140,6 +143,11 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     }
                 }
                 authenticatorInitialized = true;
+
+                if (configParameters.containsKey(ENABLE_SHA256_CERTIFICATE_THUMBPRINT)) {
+                    enableSHA256CertificateThumbprint = Boolean.parseBoolean(
+                            configParameters.get(ENABLE_SHA256_CERTIFICATE_THUMBPRINT));
+                }
             }
 
         } else {
@@ -391,7 +399,12 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
      * @throws CertificateEncodingException
      */
     private String getThumbPrint(X509Certificate cert) throws NoSuchAlgorithmException, CertificateEncodingException {
-        MessageDigest md = MessageDigest.getInstance("SHA-1");
+        MessageDigest md;
+        if (enableSHA256CertificateThumbprint) {
+            md = MessageDigest.getInstance("SHA-256");
+        } else {
+            md = MessageDigest.getInstance("SHA-1");
+        }
         byte[] certEncoded = cert.getEncoded();
         md.update(certEncoded);
         return hexify(md.digest());

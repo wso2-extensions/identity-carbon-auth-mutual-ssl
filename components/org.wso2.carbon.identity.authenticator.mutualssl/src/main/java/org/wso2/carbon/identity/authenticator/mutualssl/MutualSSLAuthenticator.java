@@ -18,6 +18,16 @@
 
 package org.wso2.carbon.identity.authenticator.mutualssl;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+
 import org.apache.axiom.om.util.Base64;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPHeader;
@@ -37,14 +47,6 @@ import org.wso2.carbon.user.api.TenantManager;
 import org.wso2.carbon.user.api.UserStoreManager;
 import org.wso2.carbon.utils.AuthenticationObserver;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
-
-import javax.servlet.http.HttpServletRequest;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateEncodingException;
-import java.security.cert.X509Certificate;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Authenticator for certificate based two-way authentication
@@ -70,6 +72,8 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
      */
     private static final String WHITE_LIST_ENABLED = "WhiteListEnabled";
 
+    private static final String THUMBPRINT_USER_MAPPING = "ThumbprintUserMapping";
+
     /**
      * Attribute name for reading client certificate in the request
      */
@@ -92,6 +96,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static boolean whiteListEnabled = false;
     private static boolean authenticatorInitialized = false;
     private static boolean enableSHA256CertificateThumbprint = true;
+    private static final Map<String, String> certificateUserMapping = new HashMap<>();
 
 
     /**
@@ -147,6 +152,22 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                 if (configParameters.containsKey(ENABLE_SHA256_CERTIFICATE_THUMBPRINT)) {
                     enableSHA256CertificateThumbprint = Boolean.parseBoolean(
                             configParameters.get(ENABLE_SHA256_CERTIFICATE_THUMBPRINT));
+                }
+
+                // Configure certificate to username mapping.
+                if (authenticatorConfig.getParameterMap().containsKey(THUMBPRINT_USER_MAPPING)) {
+                    Map<String, String> thumbprintUserMap = authenticatorConfig.getParameterMap().get(THUMBPRINT_USER_MAPPING);
+                    if (thumbprintUserMap != null) {
+                        for (Map.Entry<String, String> entry : thumbprintUserMap.entrySet()) {
+                            String thumbprint = entry.getKey().trim();
+                            String username = entry.getValue().trim();
+                            certificateUserMapping.put(thumbprint, username);
+
+                            if (log.isDebugEnabled()) {
+                                log.debug("Certificate mapping added - Thumbprint: " + thumbprint + " -> Username: " + username);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -214,14 +235,14 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                 if (certObject instanceof X509Certificate[]) {
                     X509Certificate[] cert = (X509Certificate[]) certObject;
 
+                    // Always get the thumbprint for validation
+                    thumbprint = getThumbPrint(cert[0]);
+
+                    if (log.isDebugEnabled()) {
+                        log.debug("Client certificate thumbprint is " + thumbprint);
+                    }
+
                     if (whiteListEnabled && whiteList != null) {
-                        // Client certificate is always in the index 0
-                        thumbprint = getThumbPrint(cert[0]);
-
-                        if (log.isDebugEnabled()) {
-                            log.debug("Client certificate thumbprint is " + thumbprint);
-                        }
-
                         for (String whiteThumbprint : whiteList) {
                             if (thumbprint.equals(whiteThumbprint)) {
                                 // Thumbprint of the client certificate is in the trusted list
@@ -292,11 +313,14 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                                 MutualSSLAuthenticatorServiceComponent.getRealmService().getTenantUserRealm(tenantId)
                                         .getUserStoreManager();
 
-                        if (userstore.isExistingUser(userName)) {
-                            // Username used for mutual ssl authentication is a valid user
-                            isAuthenticated = true;
+                        // Validate certificate to username binding if enabled.
+                        if (validateCertificateUserBinding(thumbprint, userName)) {
+                            // If thumbprint to username mapping is valid or validation disabled, check user existence.
+                            if (userstore.isExistingUser(userName)) {
+                                // Username used for mutual ssl authentication is a valid user.
+                                isAuthenticated = true;
+                            }
                         }
-
                         if (isAuthenticated) {
                             CarbonAuthenticationUtil.onSuccessAdminLogin(request.getSession(), userName, tenantId,
                                     tenantDomain, "Mutual SSL Authentication");
@@ -424,6 +448,35 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
             builder.append(hexDigits[(byteValue & 0xf0) >> 4]).append(hexDigits[byteValue & 0x0f]);
         }
         return builder.toString();
+    }
+
+    /**
+     * Helper method to validate certificate to username binding.
+     * 
+     * @param thumbprint Certificate thumbprint
+     * @param userName Username from header/SOAP
+     * @return true if validation passes or is disabled, false if validation fails
+     */
+    private boolean validateCertificateUserBinding(String thumbprint, String userName) {
+
+        if (thumbprint == null) {
+            return true; // Validation disabled or no thumbprint available.
+        }
+
+        String expectedUsername = certificateUserMapping.get(thumbprint);
+        if (expectedUsername == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("No username mapping found for certificate thumbprint: " + thumbprint);
+            }
+            return false; // Authentication failed - no mapping for this certificate.
+        }
+
+        if (!expectedUsername.equals(userName)) {
+                log.debug("Certificate to username binding validation failed. Certificate thumbprint is not " +
+                        "mapped with the provided username.");
+            return false; // Authentication failed due to certificate-username mismatch.
+        }
+        return true;
     }
 
     private void handleAuthenticationStarted(int tenantId) {

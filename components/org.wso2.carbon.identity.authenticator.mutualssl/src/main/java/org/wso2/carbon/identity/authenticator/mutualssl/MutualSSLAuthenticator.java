@@ -23,8 +23,10 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -96,7 +98,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static boolean whiteListEnabled = false;
     private static boolean authenticatorInitialized = false;
     private static boolean enableSHA256CertificateThumbprint = true;
-    private static final Map<String, String> certificateUserMapping = new HashMap<>();
+    private static final Map<String, Set<String>> certificateUserMapping = new HashMap<>();
 
 
     /**
@@ -132,13 +134,15 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     if (configParameters.containsKey(WHITE_LIST)) {
                         whiteList = configParameters.get(WHITE_LIST).trim().split(",");
                         int index = 0;
-                        // Remove whitespaces in the thumbprints of white list
+                        // Normalize thumbprints in the whitelist for consistent format.
                         for (String thumbprint : whiteList) {
-                            thumbprint = thumbprint.trim();
-                            whiteList[index] = thumbprint;
+                            String rawThumbprint = thumbprint.trim();
+                            String normalizedThumbprint = normalizeThumbprint(rawThumbprint);
+                            whiteList[index] = normalizedThumbprint;
 
                             if (log.isDebugEnabled()) {
-                                log.debug("Client thumbprint " + thumbprint + " added to the white list");
+                                log.debug("Client thumbprint added to whitelist - Original: '" + rawThumbprint + 
+                                        "' -> Normalized: '" + normalizedThumbprint + "'");
                             }
                             index++;
                         }
@@ -159,12 +163,12 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     Map<String, String> thumbprintUserMap = authenticatorConfig.getParameterMap().get(THUMBPRINT_USER_MAPPING);
                     if (thumbprintUserMap != null) {
                         for (Map.Entry<String, String> entry : thumbprintUserMap.entrySet()) {
-                            String thumbprint = entry.getKey().trim();
-                            String username = entry.getValue().trim();
-                            certificateUserMapping.put(thumbprint, username);
-
-                            if (log.isDebugEnabled()) {
-                                log.debug("Certificate mapping added - Thumbprint: " + thumbprint + " -> Username: " + username);
+                            String rawThumbprint = entry.getKey().trim();
+                            String normalizedThumbprint = normalizeThumbprint(rawThumbprint);
+                            Set<String> usernames = getUsernames(entry.getValue());
+                            
+                            if (!usernames.isEmpty()) {
+                                certificateUserMapping.put(normalizedThumbprint, usernames);
                             }
                         }
                     }
@@ -178,8 +182,25 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
         }
     }
 
+    private static Set<String> getUsernames(String commaSeparatedUsernames) {
+
+        // Split comma-separated usernames and create a list.
+        Set<String> usernames = new HashSet<>();
+        if (!commaSeparatedUsernames.isEmpty()) {
+            String[] usernameArray = commaSeparatedUsernames.split(",");
+            for (String username : usernameArray) {
+                String trimmedUsername = username.trim();
+                if (!trimmedUsername.isEmpty()) {
+                    usernames.add(trimmedUsername);
+                }
+            }
+        }
+        return usernames;
+    }
+
     @Override
     public int getPriority() {
+
         AuthenticatorsConfiguration authenticatorsConfiguration =
                 AuthenticatorsConfiguration.getInstance();
         AuthenticatorsConfiguration.AuthenticatorConfig authenticatorConfig =
@@ -451,30 +472,101 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     }
 
     /**
-     * Helper method to validate certificate to username binding.
-     * 
+     * Helper method to normalize thumbprint format for consistent storage.
+     * Converts both OpenSSL format (AB:CD:EF:...) and internal format (abcdef...) to internal format.
+     * Supports wildcards (*) without modification.
+     *
+     * @param thumbprint Raw thumbprint string from configuration.
+     * @return Normalized thumbprint in internal format (lowercase hex without separators)
+     */
+    private static String normalizeThumbprint(String thumbprint) {
+
+        if (thumbprint == null || thumbprint.trim().isEmpty()) {
+            return thumbprint;
+        }
+
+        String normalized = thumbprint.trim();
+
+        // Handle wildcard - don't normalize.
+        if ("*".equals(normalized)) {
+            return normalized;
+        }
+
+        // Remove colons and convert to lowercase for internal format.
+        normalized = normalized.replaceAll(":", "").toLowerCase();
+
+        if (log.isDebugEnabled()) {
+            if (!thumbprint.equals(normalized)) {
+                log.debug("Normalized thumbprint from '" + thumbprint + "' to '" + normalized + "'");
+            }
+        }
+        return normalized;
+    }
+
+    /**
+     * Helper method to validate certificate to username binding with wildcard support.
+     * <p>
+     * Supports the following patterns:
+     * - specific thumbprint -> specific username(s)
+     * - wildcard thumbprint (*) -> specific username(s)
+     * - specific thumbprint -> wildcard username (*)
+     * - wildcard thumbprint (*) -> wildcard username (*) [no validation]
+     *
      * @param thumbprint Certificate thumbprint
-     * @param userName Username from header/SOAP
+     * @param userName   Username from header/SOAP
      * @return true if validation passes or is disabled, false if validation fails
      */
     private boolean validateCertificateUserBinding(String thumbprint, String userName) {
 
-        if (thumbprint == null) {
-            return true; // Validation disabled or no thumbprint available.
+        if (thumbprint == null || certificateUserMapping.isEmpty()) {
+            // If no thumbprint or no mapping configured, skip validation.
+            return true;
         }
 
-        String expectedUsername = certificateUserMapping.get(thumbprint);
-        if (expectedUsername == null) {
+        // Check for wildcard thumbprint and wildcard username combination (no validation).
+        Set<String> wildcardThumbprintUsers = certificateUserMapping.get("*");
+        if (wildcardThumbprintUsers != null && wildcardThumbprintUsers.contains("*")) {
+            log.debug("Wildcard thumbprint (*) -> wildcard username (*) mapping found. No validation performed.");
+            return true; // No validation - accept any certificate with any username.
+        }
+
+        // First, try exact thumbprint match.
+        Set<String> expectedUsernames = certificateUserMapping.get(thumbprint);
+
+        // If no exact match, try wildcard thumbprint.
+        if (expectedUsernames == null && wildcardThumbprintUsers != null) {
+            expectedUsernames = wildcardThumbprintUsers;
+            if (log.isDebugEnabled()) {
+                log.debug("Using wildcard thumbprint (*) mapping for certificate: " + thumbprint);
+            }
+        }
+
+        if (expectedUsernames == null || expectedUsernames.isEmpty()) {
             if (log.isDebugEnabled()) {
                 log.debug("No username mapping found for certificate thumbprint: " + thumbprint);
             }
             return false; // Authentication failed - no mapping for this certificate.
         }
 
-        if (!expectedUsername.equals(userName)) {
-                log.debug("Certificate to username binding validation failed. Certificate thumbprint is not " +
-                        "mapped with the provided username.");
+        // Check if wildcard username is configured (accept any username for this thumbprint).
+        if (expectedUsernames.contains("*")) {
+            if (log.isDebugEnabled()) {
+                log.debug("Wildcard username (*) configured for thumbprint: " + thumbprint);
+            }
+            return true;
+        }
+
+        // Check if the provided username is in the list of expected usernames.
+        if (!expectedUsernames.contains(userName)) {
+            if (log.isDebugEnabled()) {
+                log.debug("Certificate to username binding validation failed. Certificate thumbprint " +
+                        thumbprint + " is not mapped to the provided username.");
+            }
             return false; // Authentication failed due to certificate-username mismatch.
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Certificate to username binding validation passed for thumbprint: " + thumbprint);
         }
         return true;
     }

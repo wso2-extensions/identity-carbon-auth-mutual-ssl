@@ -678,6 +678,10 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
             log.debug("Certificate issuer DN: " + issuerDN);
         }
 
+        if (allowedIssuers.isEmpty() && whiteListEnabled) {
+            return true; // No issuer restrictions, only thumbprint whitelist enforced.
+        }
+
         if (!allowedIssuers.isEmpty()) {
             boolean issuerTrusted = false;
             for (String trustedIssuer : allowedIssuers) {

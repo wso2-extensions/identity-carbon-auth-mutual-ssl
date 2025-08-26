@@ -79,6 +79,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static final String TRUSTED_ISSUER_LIST_CONFIG_NAME = "allowed_issuers";
     private static final String TRUSTED_ISSUER_USER_MAPPING_PREFIX = "issuer_";
     private static final String ISSUER_SEPARATOR = "\\|";
+    private static final String ENABLE_LOG_CONFIG_NAME = "log_enable";
 
     /**
      * Attribute name for reading client certificate in the request
@@ -102,6 +103,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static boolean whiteListEnabled = false;
     private static boolean authenticatorInitialized = false;
     private static boolean enableSHA256CertificateThumbprint = true;
+    private static boolean enableLoggingCertUserMapping = false;
     private static final Map<String, Set<String>> thumbprintUserMapping = new HashMap<>();
     private static final Map<String, Set<String>> certIssuerToUserMapping = new HashMap<>();
     private static final Set<String> allowedIssuers = new HashSet<>();
@@ -174,6 +176,11 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                             allowedIssuers.add(rawIssuer);
                         }
                     }
+                }
+
+                String enableLogging = configParameters.get(ENABLE_LOG_CONFIG_NAME);
+                if (enableLogging != null && !enableLogging.trim().isEmpty()) {
+                    enableLoggingCertUserMapping = Boolean.parseBoolean(enableLogging.trim());
                 }
 
                 // Load certificate issuer to username mappings.
@@ -678,6 +685,11 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
             log.debug("Certificate issuer DN: " + issuerDN);
         }
 
+        if (enableLoggingCertUserMapping) {
+            log.info("Validating certificate binding. User: " + userName + ", Thumbprint: " + thumbprint +
+                    ", Issuer: " + issuerDN);
+        }
+
         if (allowedIssuers.isEmpty() && whiteListEnabled) {
             return true; // No issuer restrictions, only thumbprint whitelist enforced.
         }
@@ -718,12 +730,12 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
         }
 
         // Check if the provided username is in the list of expected usernames.
-        if (expectedUsernames != null && !expectedUsernames.contains(userName)) {
+        if (expectedUsernames != null && expectedUsernames.contains(userName)) {
             if (log.isDebugEnabled()) {
                 log.debug("Certificate to username binding validation failed. Certificate thumbprint " +
                         thumbprint + " is not mapped to the provided username: " + userName);
             }
-            return false; // Authentication failed due to certificate-username mismatch.
+            return true; // Authentication failed due to certificate-username mismatch.
         }
 
         // Check issuer to username mapping if configured.

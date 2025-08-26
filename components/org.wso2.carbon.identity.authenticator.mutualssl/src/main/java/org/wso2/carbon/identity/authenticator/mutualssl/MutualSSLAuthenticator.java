@@ -173,7 +173,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     for (String issuer : issuers) {
                         String rawIssuer = issuer.trim();
                         if (StringUtils.isNotBlank(rawIssuer)) {
-                            allowedIssuers.add(rawIssuer);
+                            allowedIssuers.add(normalizeDN(rawIssuer));
                         }
                     }
                 }
@@ -187,7 +187,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                 for (Map.Entry<String, String> entry : configParameters.entrySet()) {
                     String configName = entry.getKey();
                     if (configName.startsWith(TRUSTED_ISSUER_USER_MAPPING_PREFIX)) {
-                        String issuer = configName.substring(TRUSTED_ISSUER_USER_MAPPING_PREFIX.length());
+                        String issuer = normalizeDN(configName.substring(TRUSTED_ISSUER_USER_MAPPING_PREFIX.length()));
                         if (allowedIssuers.contains(issuer)) {
                             String commaSeparatedUsernames = entry.getValue();
                             Set<String> usernames = getUsernames(commaSeparatedUsernames);
@@ -728,18 +728,17 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
             // Check if the provided username is in the list of expected usernames.
             if (expectedUsernames != null && expectedUsernames.contains(userName)) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Certificate to username binding validation failed. Certificate thumbprint " +
-                            thumbprint + " is not mapped to the provided username: " + userName);
+                    log.debug("Thumbprint to username mapping validation passed for thumbprint: " + thumbprint);
                 }
-                return true; // Authentication failed due to certificate-username mismatch.
+                return true;
             }
         } else {
-
-            if (certIssuerToUserMapping.isEmpty() || !certIssuerToUserMapping.containsKey(issuerDN)) {
+            String normalizedIssuerDN = normalizeDN(issuerDN);
+            if (certIssuerToUserMapping.isEmpty() || !certIssuerToUserMapping.containsKey(normalizedIssuerDN)) {
                 return false;
             }
 
-            Set<String> issuerExpectedUsernames = certIssuerToUserMapping.get(issuerDN);
+            Set<String> issuerExpectedUsernames = certIssuerToUserMapping.get(normalizedIssuerDN);
             if (!issuerExpectedUsernames.isEmpty()) {
                 return issuerExpectedUsernames.contains("*") || issuerExpectedUsernames.contains(userName);
             }

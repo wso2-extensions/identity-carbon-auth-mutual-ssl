@@ -565,18 +565,18 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
      * <p>
      * Both DNs above will be considered equal.
      *
-     * @param issuerDN First Distinguished Name
+     * @param certDN First Distinguished Name
      * @param trustedDN Second Distinguished Name
      * @return true if DNs are equivalent, false otherwise
      */
-    private static boolean isDNEqual(String issuerDN, String trustedDN) {
+    private static boolean isDNEqual(String certDN, String trustedDN) {
 
         // Quick check for exact string match.
-        if (issuerDN.equals(trustedDN)) {
+        if (certDN.equals(trustedDN)) {
             return true;
         }
         // Normalize and compare DN components.
-        String normalizedIssuerDN = normalizeDN(issuerDN);
+        String normalizedIssuerDN = normalizeDN(certDN);
         String normalizedTrustedDN = normalizeDN(trustedDN);
         return normalizedIssuerDN.equals(normalizedTrustedDN);
     }

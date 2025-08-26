@@ -76,7 +76,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
 
     private static final String THUMBPRINT_USER_MAPPING_PREFIX = "cert_thumbprint_";
 
-    private static final String TRUSTED_ISSUER_LIST_CONFIG_NAME = "TrustedIssuers";
+    private static final String TRUSTED_ISSUER_LIST_CONFIG_NAME = "trusted_issuers";
     private static final String TRUSTED_ISSUER_USER_MAPPING_PREFIX = "issuer_";
     private static final String ISSUER_SEPARATOR = "\\|";
 
@@ -361,6 +361,15 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     }
 
                     if (StringUtils.isNotEmpty(userName)) {
+                        if (!isValidCertificateBinding(cert, thumbprint, userName)) {
+                            // Certificate to username binding validation failed.
+                            if (log.isDebugEnabled()) {
+                                log.debug("Authentication request is rejected. Certificate to username binding " +
+                                        "validation failed.");
+                            }
+                            return false;
+                        }
+
                         String tenantDomain = MultitenantUtils.getTenantDomain(userName);
                         userName = MultitenantUtils.getTenantAwareUsername(userName);
                         TenantManager tenantManager =
@@ -373,13 +382,10 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                                 MutualSSLAuthenticatorServiceComponent.getRealmService().getTenantUserRealm(tenantId)
                                         .getUserStoreManager();
 
-                        // Validate certificate to username binding if enabled.
-                        if (validateCertificateUserBinding(cert, thumbprint, userName)) {
-                            // If thumbprint to username mapping is valid or validation disabled, check user existence.
-                            if (userstore.isExistingUser(userName)) {
-                                // Username used for mutual ssl authentication is a valid user.
-                                isAuthenticated = true;
-                            }
+                        // If thumbprint to username mapping is valid or validation disabled, check user existence.
+                        if (userstore.isExistingUser(userName)) {
+                            // Username used for mutual ssl authentication is a valid user.
+                            isAuthenticated = true;
                         }
                         if (isAuthenticated) {
                             CarbonAuthenticationUtil.onSuccessAdminLogin(request.getSession(), userName, tenantId,
@@ -547,8 +553,8 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
      * This method handles cases where DN components are in different orders but represent the same identity.
      * <p>
      * Examples:
-     * - "C=SL, ST=Some-State, O=Internet Widgits Pty Ltd, CN=sahan"
-     * - "CN=sahan, O=Internet Widgits Pty Ltd, ST=Some-State, C=SL"
+     * - "C=SL, ST=Some-State, O=Internet Widgits Pty Ltd, CN=user"
+     * - "CN=user, O=Internet Widgits Pty Ltd, ST=Some-State, C=SL"
      * <p>
      * Both DNs above will be considered equal.
      *
@@ -657,7 +663,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
      * @param userName    Username from header/SOAP
      * @return true if validation passes or is disabled, false if validation fails
      */
-    private boolean validateCertificateUserBinding(X509Certificate[] certificate, String thumbprint, String userName) {
+    private boolean isValidCertificateBinding(X509Certificate[] certificate, String thumbprint, String userName) {
 
         if (certificate == null || certificate.length == 0) {
             if (log.isDebugEnabled()) {
@@ -733,26 +739,8 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
             return true;
         }
 
-        // Check for wildcard thumbprint and wildcard username combination (no validation).
-        Set<String> wildcardThumbprintUsers = thumbprintUserMapping.get("*");
-        if (wildcardThumbprintUsers != null && wildcardThumbprintUsers.contains("*")) {
-            if (log.isDebugEnabled()) {
-                log.debug("Wildcard thumbprint (*) -> wildcard username (*) mapping found. No thumbprint" +
-                        " validation performed.");
-            }
-            return true; // No thumbprint validation - accept any certificate with any username.
-        }
-
         // First, try exact thumbprint match.
         Set<String> expectedUsernames = thumbprintUserMapping.get(thumbprint);
-
-        // If no exact match, try wildcard thumbprint.
-        if (expectedUsernames == null && wildcardThumbprintUsers != null) {
-            expectedUsernames = wildcardThumbprintUsers;
-            if (log.isDebugEnabled()) {
-                log.debug("Using wildcard thumbprint (*) mapping for certificate: " + thumbprint);
-            }
-        }
 
         if (expectedUsernames == null || expectedUsernames.isEmpty()) {
             if (log.isDebugEnabled()) {

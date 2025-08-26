@@ -79,7 +79,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static final String TRUSTED_ISSUER_LIST_CONFIG_NAME = "allowed_issuers";
     private static final String TRUSTED_ISSUER_USER_MAPPING_PREFIX = "issuer_";
     private static final String ISSUER_SEPARATOR = "\\|";
-    private static final String ENABLE_LOG_CONFIG_NAME = "log_enabled";
+    private static final String ENABLE_CERT_INFO_LOGGING_CONFIG_NAME = "log_client_cert_info";
 
     /**
      * Attribute name for reading client certificate in the request
@@ -103,7 +103,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static boolean whiteListEnabled = false;
     private static boolean authenticatorInitialized = false;
     private static boolean enableSHA256CertificateThumbprint = true;
-    private static boolean enableLoggingCertUserMapping = false;
+    private static boolean enableCertInfoLogging = false;
     private static final Map<String, Set<String>> thumbprintUserMapping = new HashMap<>();
     private static final Map<String, Set<String>> certIssuerToUserMapping = new HashMap<>();
     private static final Set<String> allowedIssuers = new HashSet<>();
@@ -178,9 +178,9 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     }
                 }
 
-                String enableLogging = configParameters.get(ENABLE_LOG_CONFIG_NAME);
+                String enableLogging = configParameters.get(ENABLE_CERT_INFO_LOGGING_CONFIG_NAME);
                 if (enableLogging != null && !enableLogging.trim().isEmpty()) {
-                    enableLoggingCertUserMapping = Boolean.parseBoolean(enableLogging.trim());
+                    enableCertInfoLogging = Boolean.parseBoolean(enableLogging.trim());
                 }
 
                 // Load certificate issuer to username mappings.
@@ -643,23 +643,22 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     }
 
     /**
-     * Helper method to validate certificate to username binding with issuer and thumbprint validation.
+     * Validates certificate to username binding based on issuer trust and optional thumbprint/issuer mappings.
      * <p>
-     * Validation flow:
-     * 1. Check if certificate issuer is in trusted list
-     * 2. If issuer mapping exists, validate username against issuer mapping
-     * 3. If issuer validation passes, check thumbprint to username mapping with wildcard support
+     * Validation steps:
+     * 1. Extract certificate issuer DN and verify it's in the trusted issuer list
+     * 2. Check thumbprint-to-username mapping if configured (takes precedence)
+     * 3. Otherwise check issuer-to-username mapping
+     * 4. Support wildcard (*) username for any certificate/issuer
      * <p>
-     * Supports the following patterns:
-     * - specific thumbprint -> specific username(s)
-     * - wildcard thumbprint (*) -> specific username(s)
-     * - specific thumbprint -> wildcard username (*)
-     * - wildcard thumbprint (*) -> wildcard username (*) [no validation]
+     * Configuration patterns:
+     * - cert_thumbprint_[THUMBPRINT] = username1,username2,*
+     * - issuer_[ISSUER_DN] = username1,username2,*
      *
-     * @param certificate X509 certificate array from client
-     * @param thumbprint  Certificate thumbprint
-     * @param userName    Username from header/SOAP
-     * @return true if validation passes or is disabled, false if validation fails
+     * @param certificate X509 certificate array from client (uses first certificate)
+     * @param thumbprint  Certificate thumbprint (normalized format)
+     * @param userName    Username from HTTP/SOAP header
+     * @return true if certificate binding validation passes, false if validation fails
      */
     private boolean isValidCertificateBinding(X509Certificate[] certificate, String thumbprint, String userName) {
 
@@ -679,7 +678,7 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
             log.debug("Certificate issuer DN: " + issuerDN);
         }
 
-        if (enableLoggingCertUserMapping) {
+        if (enableCertInfoLogging) {
             log.info("Validating certificate binding. User: " + userName + ", Thumbprint: " + thumbprint +
                     ", Issuer: " + issuerDN);
         }

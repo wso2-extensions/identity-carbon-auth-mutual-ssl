@@ -27,7 +27,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.wso2.carbon.identity.carbon.auth.mutualssl</groupId>
     <artifactId>identity-carbon-auth-mutual-ssl</artifactId>
-    <version>5.5.1-SNAPSHOT</version>
+    <version>5.5.0</version>
     <packaging>pom</packaging>
     <name>WSO2 Carbon - Mutual SSL Authenticator Module</name>
     <description>
@@ -99,6 +99,25 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>${jacoco.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.wso2.carbon.identity.framework</groupId>
+                <artifactId>org.wso2.carbon.identity.testutil</artifactId>
+                <version>${org.wso2.carbon.identity.testutil.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testng</groupId>
+                <artifactId>testng</artifactId>
+                <scope>test</scope>
+                <version>${testng.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito-core.version}</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -250,6 +269,10 @@
         <pax.logging.api.version>1.10.1</pax.logging.api.version>
     
         <jacoco.version>0.8.12</jacoco.version>
+
+        <org.wso2.carbon.identity.testutil.version>7.8.385</org.wso2.carbon.identity.testutil.version>
+        <testng.version>7.10.1</testng.version>
+        <mockito-core.version>5.3.1</mockito-core.version>
     </properties>
 
 </project>

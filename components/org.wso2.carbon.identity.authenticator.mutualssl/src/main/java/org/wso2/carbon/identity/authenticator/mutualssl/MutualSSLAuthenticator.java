@@ -691,18 +691,18 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
             return false;
         }
 
-        boolean issuerTrusted = false;
-        for (String trustedIssuer : allowedIssuers) {
-            if (isDNEqual(issuerDN, trustedIssuer)) {
-                issuerTrusted = true;
+        boolean issuerAllowed = false;
+        for (String allowedIssuer : allowedIssuers) {
+            if (isDNEqual(issuerDN, allowedIssuer)) {
+                issuerAllowed = true;
                 if (log.isDebugEnabled()) {
-                    log.debug("Certificate issuer matched trusted issuer: " + trustedIssuer);
+                    log.debug("Certificate issuer matched with allowed issuer: " + allowedIssuer);
                 }
                 break;
             }
         }
 
-        if (!issuerTrusted) {
+        if (!issuerAllowed) {
             if (log.isDebugEnabled()) {
                 log.debug("Certificate issuer is not in trusted list: " + issuerDN);
             }

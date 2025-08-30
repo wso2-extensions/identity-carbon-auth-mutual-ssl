@@ -27,7 +27,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.wso2.carbon.identity.carbon.auth.mutualssl</groupId>
     <artifactId>identity-carbon-auth-mutual-ssl</artifactId>
-    <version>5.5.0</version>
+    <version>5.5.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>WSO2 Carbon - Mutual SSL Authenticator Module</name>
     <description>
@@ -194,8 +194,8 @@
                 <inherited>true</inherited>
                 <configuration>
                     <encoding>UTF-8</encoding>
-                    <source>1.7</source>
-                    <target>1.7</target>
+                    <source>1.8</source>
+                    <target>1.8</target>
                 </configuration>
             </plugin>
             <plugin>

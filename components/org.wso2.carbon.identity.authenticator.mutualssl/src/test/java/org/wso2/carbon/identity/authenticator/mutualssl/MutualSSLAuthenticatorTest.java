@@ -204,8 +204,7 @@ public class MutualSSLAuthenticatorTest {
         when(httpServletRequest.getAttribute("javax.servlet.request.X509Certificate")).thenReturn(certificates);
         when(x509Certificate.getEncoded()).thenReturn("test_cert_data".getBytes());
 
-        javax.security.auth.x500.X500Principal issuerPrincipal = mock(javax.security.auth.x500.X500Principal.class);
-        when(issuerPrincipal.getName()).thenReturn("CN=Test Issuer, O=Test Org, C=US");
+        javax.security.auth.x500.X500Principal issuerPrincipal = new javax.security.auth.x500.X500Principal("CN=Test Issuer, O=Test Org, C=US");
         when(x509Certificate.getIssuerDN()).thenReturn(issuerPrincipal);
 
         String encodedUsername = org.apache.axiom.om.util.Base64.encode(username.getBytes(StandardCharsets.UTF_8));

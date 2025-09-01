@@ -106,6 +106,16 @@
                 <artifactId>org.wso2.carbon.identity.testutil</artifactId>
                 <version>${org.wso2.carbon.identity.testutil.version}</version>
                 <scope>test</scope>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.mockito</groupId>
+                        <artifactId>mockito-core</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.mockito</groupId>
+                        <artifactId>mockito-inline</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.testng</groupId>
@@ -115,8 +125,8 @@
             </dependency>
             <dependency>
                 <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
-                <version>${mockito-core.version}</version>
+                <artifactId>mockito-inline</artifactId>
+                <version>${mockito-inline.version}</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>
@@ -271,8 +281,8 @@
         <jacoco.version>0.8.12</jacoco.version>
 
         <org.wso2.carbon.identity.testutil.version>7.8.385</org.wso2.carbon.identity.testutil.version>
-        <testng.version>7.10.1</testng.version>
-        <mockito-core.version>5.3.1</mockito-core.version>
+        <testng.version>6.14.3</testng.version>
+        <mockito-inline.version>3.12.4</mockito-inline.version>
     </properties>
 
 </project>

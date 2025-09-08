@@ -18,6 +18,18 @@
 
 package org.wso2.carbon.identity.authenticator.mutualssl;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.servlet.http.HttpServletRequest;
+
 import org.apache.axiom.om.util.Base64;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPHeader;
@@ -37,14 +49,6 @@ import org.wso2.carbon.user.api.TenantManager;
 import org.wso2.carbon.user.api.UserStoreManager;
 import org.wso2.carbon.utils.AuthenticationObserver;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
-
-import javax.servlet.http.HttpServletRequest;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateEncodingException;
-import java.security.cert.X509Certificate;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Authenticator for certificate based two-way authentication
@@ -70,6 +74,12 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
      */
     private static final String WHITE_LIST_ENABLED = "WhiteListEnabled";
 
+    private static final String THUMBPRINT_USER_MAPPING_PREFIX = "cert_thumbprint_";
+
+    private static final String TRUSTED_ISSUER_LIST_CONFIG_NAME = "allowed_issuers";
+    private static final String TRUSTED_ISSUER_USER_MAPPING_PREFIX = "issuer_";
+    private static final String ISSUER_SEPARATOR = "\\|";
+
     /**
      * Attribute name for reading client certificate in the request
      */
@@ -92,6 +102,9 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static boolean whiteListEnabled = false;
     private static boolean authenticatorInitialized = false;
     private static boolean enableSHA256CertificateThumbprint = true;
+    private static final Map<String, Set<String>> thumbprintUserMapping = new HashMap<>();
+    private static final Map<String, Set<String>> certIssuerToUserMapping = new HashMap<>();
+    private static final Set<String> allowedIssuers = new HashSet<>();
 
 
     /**
@@ -127,13 +140,15 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     if (configParameters.containsKey(WHITE_LIST)) {
                         whiteList = configParameters.get(WHITE_LIST).trim().split(",");
                         int index = 0;
-                        // Remove whitespaces in the thumbprints of white list
+                        // Normalize thumbprints in the whitelist for consistent format.
                         for (String thumbprint : whiteList) {
-                            thumbprint = thumbprint.trim();
-                            whiteList[index] = thumbprint;
+                            String rawThumbprint = thumbprint.trim();
+                            String normalizedThumbprint = normalizeThumbprint(rawThumbprint);
+                            whiteList[index] = normalizedThumbprint;
 
                             if (log.isDebugEnabled()) {
-                                log.debug("Client thumbprint " + thumbprint + " added to the white list");
+                                log.debug("Client thumbprint added to whitelist - Original: '" + rawThumbprint +
+                                        "' -> Normalized: '" + normalizedThumbprint + "'");
                             }
                             index++;
                         }
@@ -148,6 +163,54 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     enableSHA256CertificateThumbprint = Boolean.parseBoolean(
                             configParameters.get(ENABLE_SHA256_CERTIFICATE_THUMBPRINT));
                 }
+
+                // Loading the trusted issuers.
+                String issuerList = configParameters.get(TRUSTED_ISSUER_LIST_CONFIG_NAME);
+                if (StringUtils.isNotBlank(issuerList)) {
+                    String[] issuers = issuerList.split(ISSUER_SEPARATOR);
+                    for (String issuer : issuers) {
+                        String rawIssuer = issuer.trim();
+                        if (StringUtils.isNotBlank(rawIssuer)) {
+                            allowedIssuers.add(normalizeDN(rawIssuer));
+                        }
+                    }
+                }
+
+                // Load certificate issuer to username mappings.
+                for (Map.Entry<String, String> entry : configParameters.entrySet()) {
+                    String configName = entry.getKey();
+                    if (configName.startsWith(TRUSTED_ISSUER_USER_MAPPING_PREFIX)) {
+                        String issuer = normalizeDN(configName.substring(TRUSTED_ISSUER_USER_MAPPING_PREFIX.length()));
+                        if (allowedIssuers.contains(issuer)) {
+                            String commaSeparatedUsernames = entry.getValue();
+                            Set<String> usernames = getUsernames(commaSeparatedUsernames);
+                            if (!usernames.isEmpty()) {
+                                certIssuerToUserMapping.put(issuer, usernames);
+                                if (log.isDebugEnabled()) {
+                                    log.debug("Added certificate issuer to username mapping: " + issuer);
+                                }
+                            } else {
+                                log.warn("No usernames configured for certificate issuer: " + issuer);
+                            }
+                        } else {
+                            log.warn("Ignoring certificate issuer to username mapping for untrusted issuer: " +
+                                    issuer);
+                        }
+                    } else if (configName.startsWith(THUMBPRINT_USER_MAPPING_PREFIX)) {
+                        String thumbprint = configName.substring(THUMBPRINT_USER_MAPPING_PREFIX.length());
+                        String normalizedThumbprint = normalizeThumbprint(thumbprint);
+                        String commaSeparatedUsernames = entry.getValue();
+                        Set<String> usernames = getUsernames(commaSeparatedUsernames);
+                        if (!usernames.isEmpty()) {
+                            thumbprintUserMapping.put(normalizedThumbprint, usernames);
+                            if (log.isDebugEnabled()) {
+                                log.debug("Added certificate thumbprint to username mapping: " + normalizedThumbprint);
+                            }
+                        } else {
+                            log.warn("No usernames configured for certificate thumbprint: " + thumbprint);
+                        }
+                    }
+                }
             }
 
         } else {
@@ -157,8 +220,25 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
         }
     }
 
+    private static Set<String> getUsernames(String commaSeparatedUsernames) {
+
+        // Split comma-separated usernames and create a list.
+        Set<String> usernames = new HashSet<>();
+        if (!commaSeparatedUsernames.isEmpty()) {
+            String[] usernameArray = commaSeparatedUsernames.split(",");
+            for (String username : usernameArray) {
+                String trimmedUsername = username.trim();
+                if (!trimmedUsername.isEmpty()) {
+                    usernames.add(trimmedUsername);
+                }
+            }
+        }
+        return usernames;
+    }
+
     @Override
     public int getPriority() {
+
         AuthenticatorsConfiguration authenticatorsConfiguration =
                 AuthenticatorsConfiguration.getInstance();
         AuthenticatorsConfiguration.AuthenticatorConfig authenticatorConfig =
@@ -210,18 +290,19 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                 // soapenv:mustUnderstand="0">234</m:UserName>
                 boolean trustedThumbprint = false;
                 String thumbprint = null;
+                X509Certificate[] cert = null;
 
                 if (certObject instanceof X509Certificate[]) {
-                    X509Certificate[] cert = (X509Certificate[]) certObject;
+                    cert = (X509Certificate[]) certObject;
+
+                    // Always get the thumbprint for validation
+                    thumbprint = getThumbPrint(cert[0]);
+
+                    if (log.isDebugEnabled()) {
+                        log.debug("Client certificate thumbprint is " + thumbprint);
+                    }
 
                     if (whiteListEnabled && whiteList != null) {
-                        // Client certificate is always in the index 0
-                        thumbprint = getThumbPrint(cert[0]);
-
-                        if (log.isDebugEnabled()) {
-                            log.debug("Client certificate thumbprint is " + thumbprint);
-                        }
-
                         for (String whiteThumbprint : whiteList) {
                             if (thumbprint.equals(whiteThumbprint)) {
                                 // Thumbprint of the client certificate is in the trusted list
@@ -280,6 +361,15 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                     }
 
                     if (StringUtils.isNotEmpty(userName)) {
+                        if (!isValidCertificateBinding(cert, thumbprint, userName)) {
+                            // Certificate to username binding validation failed.
+                            if (log.isDebugEnabled()) {
+                                log.debug("Authentication request is rejected. Certificate to username binding " +
+                                        "validation failed.");
+                            }
+                            return false;
+                        }
+
                         String tenantDomain = MultitenantUtils.getTenantDomain(userName);
                         userName = MultitenantUtils.getTenantAwareUsername(userName);
                         TenantManager tenantManager =
@@ -292,11 +382,11 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                                 MutualSSLAuthenticatorServiceComponent.getRealmService().getTenantUserRealm(tenantId)
                                         .getUserStoreManager();
 
+                        // If thumbprint to username mapping is valid or validation disabled, check user existence.
                         if (userstore.isExistingUser(userName)) {
-                            // Username used for mutual ssl authentication is a valid user
+                            // Username used for mutual ssl authentication is a valid user.
                             isAuthenticated = true;
                         }
-
                         if (isAuthenticated) {
                             CarbonAuthenticationUtil.onSuccessAdminLogin(request.getSession(), userName, tenantId,
                                     tenantDomain, "Mutual SSL Authentication");
@@ -424,6 +514,227 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
             builder.append(hexDigits[(byteValue & 0xf0) >> 4]).append(hexDigits[byteValue & 0x0f]);
         }
         return builder.toString();
+    }
+
+    /**
+     * Helper method to normalize thumbprint format for consistent storage.
+     * Converts both OpenSSL format (AB:CD:EF:...) and internal format (abcdef...) to internal format.
+     * Supports wildcards (*) without modification.
+     *
+     * @param thumbprint Raw thumbprint string from configuration.
+     * @return Normalized thumbprint in internal format (lowercase hex without separators)
+     */
+    private static String normalizeThumbprint(String thumbprint) {
+
+        if (thumbprint == null || thumbprint.trim().isEmpty()) {
+            return thumbprint;
+        }
+
+        String normalized = thumbprint.trim();
+
+        // Handle wildcard - don't normalize.
+        if ("*".equals(normalized)) {
+            return normalized;
+        }
+
+        // Remove colons and convert to lowercase for internal format.
+        normalized = normalized.replaceAll(":", "").toLowerCase();
+
+        if (log.isDebugEnabled()) {
+            if (!thumbprint.equals(normalized)) {
+                log.debug("Normalized thumbprint from '" + thumbprint + "' to '" + normalized + "'");
+            }
+        }
+        return normalized;
+    }
+
+    /**
+     * Helper method to normalize and compare Distinguished Names (DNs) regardless of component ordering.
+     * This method handles cases where DN components are in different orders but represent the same identity.
+     * <p>
+     * Examples:
+     * - "C=SL, ST=Some-State, O=Internet Widgits Pty Ltd, CN=user"
+     * - "CN=user, O=Internet Widgits Pty Ltd, ST=Some-State, C=SL"
+     * <p>
+     * Both DNs above will be considered equal.
+     *
+     * @param certDN First Distinguished Name
+     * @param trustedDN Second Distinguished Name
+     * @return true if DNs are equivalent, false otherwise
+     */
+    private static boolean isDNEqual(String certDN, String trustedDN) {
+
+        // Quick check for exact string match.
+        if (certDN.equals(trustedDN)) {
+            return true;
+        }
+        // Normalize and compare DN components.
+        String normalizedIssuerDN = normalizeDN(certDN);
+        String normalizedTrustedDN = normalizeDN(trustedDN);
+        return normalizedIssuerDN.equals(normalizedTrustedDN);
+    }
+
+    /**
+     * Helper method to normalize a Distinguished Name by sorting its components.
+     * This ensures that DNs with the same components in different orders are normalized to the same string.
+     *
+     * @param dn Distinguished Name to normalize
+     * @return Normalized DN string with components sorted alphabetically
+     */
+    private static String normalizeDN(String dn) {
+
+        if (dn == null || dn.trim().isEmpty()) {
+            return dn;
+        }
+
+        try {
+            // Split DN into components and normalize each.
+            String[] components = dn.split(",");
+            String[] normalizedComponents = new String[components.length];
+
+            for (int i = 0; i < components.length; i++) {
+                String component = components[i].trim();
+                // Normalize whitespace around the equals sign.
+                if (component.contains("=")) {
+                    String[] parts = component.split("=", 2);
+                    if (parts.length == 2) {
+                        normalizedComponents[i] = parts[0].trim().toUpperCase() + "=" + parts[1].trim();
+                    } else {
+                        normalizedComponents[i] = component;
+                    }
+                } else {
+                    normalizedComponents[i] = component;
+                }
+            }
+
+            // Sort components to ensure consistent ordering.
+            java.util.Arrays.sort(normalizedComponents);
+
+            StringBuilder normalized = new StringBuilder();
+            for (int i = 0; i < normalizedComponents.length; i++) {
+                if (i > 0) {
+                    normalized.append(", ");
+                }
+                normalized.append(normalizedComponents[i]);
+            }
+
+            String result = normalized.toString();
+
+            if (log.isDebugEnabled()) {
+                if (!dn.equals(result)) {
+                    log.debug("Normalized DN from '" + dn + "' to '" + result + "'");
+                }
+            }
+
+            return result;
+        } catch (Exception e) {
+            if (log.isDebugEnabled()) {
+                log.debug("Failed to normalize DN: " + dn + ". Using original DN. Error: " + e.getMessage());
+            }
+            return dn; // Return original DN if normalization fails.
+        }
+    }
+
+    /**
+     * Validates certificate to username binding based on issuer trust and optional thumbprint/issuer mappings.
+     * <p>
+     * Validation steps:
+     * 1. Extract certificate issuer DN and verify it's in the trusted issuer list
+     * 2. Check thumbprint-to-username mapping if configured (takes precedence)
+     * 3. Otherwise check issuer-to-username mapping
+     * 4. Support wildcard (*) username for any certificate/issuer
+     * <p>
+     * Configuration patterns:
+     * - cert_thumbprint_[THUMBPRINT] = username1,username2,*
+     * - issuer_[ISSUER_DN] = username1,username2,*
+     *
+     * @param certificate X509 certificate array from client (uses first certificate)
+     * @param thumbprint  Certificate thumbprint (normalized format)
+     * @param userName    Username from HTTP/SOAP header
+     * @return true if certificate binding validation passes, false if validation fails
+     */
+    private boolean isValidCertificateBinding(X509Certificate[] certificate, String thumbprint, String userName) {
+
+        if (certificate == null || certificate.length == 0) {
+            if (log.isDebugEnabled()) {
+                log.debug("No certificate provided for validation");
+            }
+            return false;
+        }
+
+        // Step 1: Check if certificate issuer is in allowed list.
+        String issuerDN = certificate[0].getIssuerDN().getName();
+        if (StringUtils.isBlank(issuerDN)) {
+            return false;
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("Certificate issuer DN: " + issuerDN);
+        }
+
+        if (allowedIssuers.isEmpty() && whiteListEnabled) {
+            return true; // No issuer restrictions, only thumbprint whitelist enforced.
+        }
+
+        if (allowedIssuers.isEmpty()) {
+            return false;
+        }
+
+        boolean issuerAllowed = false;
+        for (String allowedIssuer : allowedIssuers) {
+            if (isDNEqual(issuerDN, allowedIssuer)) {
+                issuerAllowed = true;
+                if (log.isDebugEnabled()) {
+                    log.debug("Certificate issuer matched with allowed issuer: " + allowedIssuer);
+                }
+                break;
+            }
+        }
+
+        if (!issuerAllowed) {
+            if (log.isDebugEnabled()) {
+                log.debug("Certificate issuer is not in trusted list: " + issuerDN);
+            }
+            return false;
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Certificate issuer validation passed: " + issuerDN);
+        }
+
+        if (!thumbprintUserMapping.isEmpty() && thumbprintUserMapping.containsKey(thumbprint)) {
+            // First, try exact thumbprint match.
+            Set<String> expectedUsernames = thumbprintUserMapping.get(thumbprint);
+
+            // Check if wildcard username is configured (accept any username for this thumbprint).
+            if (expectedUsernames != null && expectedUsernames.contains("*")) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Wildcard username (*) configured for thumbprint: " + thumbprint);
+                }
+                return true;
+            }
+
+            // Check if the provided username is in the list of expected usernames.
+            if (expectedUsernames != null && expectedUsernames.contains(userName)) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Thumbprint to username mapping validation passed for thumbprint: " + thumbprint);
+                }
+                return true;
+            }
+        } else {
+            String normalizedIssuerDN = normalizeDN(issuerDN);
+            if (certIssuerToUserMapping.isEmpty() || !certIssuerToUserMapping.containsKey(normalizedIssuerDN)) {
+                return false;
+            }
+
+            Set<String> issuerExpectedUsernames = certIssuerToUserMapping.get(normalizedIssuerDN);
+            if (!issuerExpectedUsernames.isEmpty()) {
+                return issuerExpectedUsernames.contains("*") || issuerExpectedUsernames.contains(userName);
+            }
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("Certificate issuer to username binding validation failed. Issuer " + issuerDN);
+        }
+        return false;
     }
 
     private void handleAuthenticationStarted(int tenantId) {

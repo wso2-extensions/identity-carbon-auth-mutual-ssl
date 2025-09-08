@@ -79,7 +79,6 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static final String TRUSTED_ISSUER_LIST_CONFIG_NAME = "allowed_issuers";
     private static final String TRUSTED_ISSUER_USER_MAPPING_PREFIX = "issuer_";
     private static final String ISSUER_SEPARATOR = "\\|";
-    private static final String ENABLE_CERT_INFO_LOGGING_CONFIG_NAME = "log_client_cert_info";
 
     /**
      * Attribute name for reading client certificate in the request
@@ -103,7 +102,6 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
     private static boolean whiteListEnabled = false;
     private static boolean authenticatorInitialized = false;
     private static boolean enableSHA256CertificateThumbprint = true;
-    private static boolean enableCertInfoLogging = false;
     private static final Map<String, Set<String>> thumbprintUserMapping = new HashMap<>();
     private static final Map<String, Set<String>> certIssuerToUserMapping = new HashMap<>();
     private static final Set<String> allowedIssuers = new HashSet<>();
@@ -176,11 +174,6 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
                             allowedIssuers.add(normalizeDN(rawIssuer));
                         }
                     }
-                }
-
-                String enableLogging = configParameters.get(ENABLE_CERT_INFO_LOGGING_CONFIG_NAME);
-                if (enableLogging != null && !enableLogging.trim().isEmpty()) {
-                    enableCertInfoLogging = Boolean.parseBoolean(enableLogging.trim());
                 }
 
                 // Load certificate issuer to username mappings.
@@ -676,11 +669,6 @@ public class MutualSSLAuthenticator implements CarbonServerAuthenticator {
         }
         if (log.isDebugEnabled()) {
             log.debug("Certificate issuer DN: " + issuerDN);
-        }
-
-        if (enableCertInfoLogging) {
-            log.info("Validating certificate binding. User: " + userName + ", Thumbprint: " + thumbprint +
-                    ", Issuer: " + issuerDN);
         }
 
         if (allowedIssuers.isEmpty() && whiteListEnabled) {

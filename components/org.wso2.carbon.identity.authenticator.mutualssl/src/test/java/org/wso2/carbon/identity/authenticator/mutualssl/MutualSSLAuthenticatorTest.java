@@ -135,7 +135,6 @@ public class MutualSSLAuthenticatorTest {
         setStaticField(authClass, "whiteListEnabled", false);
         setStaticField(authClass, "authenticatorInitialized", false);
         setStaticField(authClass, "enableSHA256CertificateThumbprint", true);
-        setStaticField(authClass, "enableCertInfoLogging", false);
 
         // Reset static collections.
         resetStaticCollection(authClass, "thumbprintUserMapping");

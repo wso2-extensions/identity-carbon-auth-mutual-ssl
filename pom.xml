@@ -113,7 +113,7 @@
                     </exclusion>
                     <exclusion>
                         <groupId>org.mockito</groupId>
-                        <artifactId>mockito-inline</artifactId>
+                        <artifactId>mockito-core</artifactId>
                     </exclusion>
                 </exclusions>
             </dependency>
@@ -125,8 +125,8 @@
             </dependency>
             <dependency>
                 <groupId>org.mockito</groupId>
-                <artifactId>mockito-inline</artifactId>
-                <version>${mockito-inline.version}</version>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito-core.version}</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>
@@ -204,8 +204,8 @@
                 <inherited>true</inherited>
                 <configuration>
                     <encoding>UTF-8</encoding>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <source>21</source>
+                    <target>21</target>
                 </configuration>
             </plugin>
             <plugin>
@@ -271,7 +271,7 @@
         <commons-lang.wso2.osgi.version.range>[2.6.0,3.0.0)</commons-lang.wso2.osgi.version.range>
 
         <!-- Maven Plugin Version -->
-        <maven.bundle.plugin.version>3.2.0</maven.bundle.plugin.version>
+        <maven.bundle.plugin.version>5.1.9</maven.bundle.plugin.version>
         <maven.buildnumber.plugin.version>1.4</maven.buildnumber.plugin.version>
         <carbon.p2.plugin.version>1.5.3</carbon.p2.plugin.version>
 
@@ -281,8 +281,8 @@
         <jacoco.version>0.8.12</jacoco.version>
 
         <org.wso2.carbon.identity.testutil.version>7.8.385</org.wso2.carbon.identity.testutil.version>
-        <testng.version>6.14.3</testng.version>
-        <mockito-inline.version>3.12.4</mockito-inline.version>
+        <testng.version>7.10.1</testng.version>
+        <mockito-core.version>5.3.1</mockito-core.version>
     </properties>
 
 </project>

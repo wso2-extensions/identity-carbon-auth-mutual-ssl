@@ -66,7 +66,7 @@
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
-            <artifactId>mockito-inline</artifactId>
+            <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -80,7 +80,7 @@
                 </exclusion>
                 <exclusion>
                     <groupId>org.mockito</groupId>
-                    <artifactId>mockito-inline</artifactId>
+                    <artifactId>mockito-core</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
